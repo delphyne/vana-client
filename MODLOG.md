@@ -25174,3 +25174,13 @@ Settings > Graphics > Upscaling (config `upscaler` 0 off / 1 FSR / 2 external, `
 - Ours (camera.rs `spring`): a push stops 0.5 short of what the look -> pushed eye (+0.5) ray hits, where (A) would put
   it, and never pulls in (that stays (A)'s). The eye settles there and stays. Test spring_rests_in_front_of_a_wall
   (a wall 2 back: rests at 1.5; retail's spring in the same loop still saws by more than 0.3).
+
+## Mods take the pad's sticks and read its button settings (ours, 2026-11-26)
+- `input.take_sticks(movement, camera)` (input.capture): gamepad.rs zeroes the taken pair of `read`'s stick values
+  (camera X / Y, movement X / Y) before they become the frame's stick bytes, so the character stands and the camera
+  holds while a mod's own map scrolls with them. Per mod (ModState::sticks_taken, gone with the VM); pad_filter gives
+  the union over running mods with the permission, nothing while no XInput pad plays.
+- `input.pad()` adds `move_x`, `move_y`, `cam_x`, `cam_y`: those stick values before the taking, as the map window's
+  axes 0x79 / 0x7a / 0x7c get them, Y turned up positive as lx .. ry (padsin's default puts -lY on slot 23, so the
+  game's is down positive). And `map`: the XInput buttons on slots 0 (confirm), 3 (cancel) and 1 (menu) of padsin,
+  by name. A DirectInput device is not given to mods, as its buttons.
