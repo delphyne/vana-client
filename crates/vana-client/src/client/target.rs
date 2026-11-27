@@ -112,6 +112,37 @@ pub fn last_subtarget(w: &World) -> Option<(u32, u16)> {
     last_subtarget_index(id, w.my_id, w.my_index, entity_index)
 }
 
+/// Ours (mods): the sub-target cursor's pick while a prompt is up. The party-list cursor's member (the fellow on its
+/// row; a member in another zone resolves, with no entity here), else the 3D prompt's pick, which is the target for
+/// as long as the prompt is open.
+pub fn subtarget(w: &World) -> Option<(u32, u16)> {
+    if let Some(pc) = &w.party_cursor {
+        if pc.fellow {
+            return super::petrow::fellow(w).and_then(|(id, _)| w.entities.get(&id).map(|e| (id, e.index)));
+        }
+        if pc.index == 0 {
+            return Some((w.my_id, w.my_index));
+        }
+        return w.party.slots().slots.get(pc.index).cloned().flatten().map(|m| (m.id, m.index));
+    }
+    let t = w.target.filter(|_| w.prompt.is_some())?;
+    if t == w.my_id {
+        return Some((w.my_id, w.my_index));
+    }
+    w.entities.get(&t).map(|e| (t, e.index))
+}
+
+/// Ours (mods): the target apart from the sub-target prompt. The 3D prompt moves the target to its pick and gives
+/// the saved one back when it closes (`restore`); this is the saved one meanwhile, while it is still here.
+pub fn main_target(w: &World) -> Option<u32> {
+    let saved = w.prompt.as_ref().map(|s| s.saved.filter(|&t| t == w.my_id || w.entities.contains_key(&t)));
+    main_target_rule(w.target, saved)
+}
+
+fn main_target_rule(target: Option<u32>, prompt_saved: Option<Option<u32>>) -> Option<u32> {
+    prompt_saved.unwrap_or(target)
+}
+
 /// FUN_101593c0 on the focus target: someone other than us in our six slots.
 pub fn focus_member(w: &World) -> Option<u32> {
     w.focus.map(|f| f.0).filter(|&id| id != w.my_id && in_own_six(w, id))
@@ -1653,6 +1684,15 @@ mod tests {
         assert_eq!(last_subtarget_index(7, 1, 0x405, Some(0x406)), Some((7, 0x406)));
         assert_eq!(last_subtarget_index(1, 1, 0x405, None), Some((1, 0x405)));
         assert_eq!(last_subtarget_index(7, 1, 0x405, None), None);
+    }
+
+    /// With no prompt the main target is the target; an open prompt's saved target stands in, also when it saved none.
+    #[test]
+    fn main_target_rule_prompt() {
+        assert_eq!(main_target_rule(Some(7), None), Some(7));
+        assert_eq!(main_target_rule(None, None), None);
+        assert_eq!(main_target_rule(Some(7), Some(Some(9))), Some(9));
+        assert_eq!(main_target_rule(Some(7), Some(None)), None);
     }
 
     /// Side input keeps the radius (circle strafe); forward closes in, stopping at 0.8.
